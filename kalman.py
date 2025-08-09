@@ -8,12 +8,21 @@ from scipy.stats import norm
 dt = 1.0
 n_steps = 60
 velocity = 5.0
-process_variance = 0.5**2
+# process_variance = 0.5**2
 measurement_variance = 1.5**2
 initial_mean = 0.0
 initial_variance = 5.0**2
+# a) 物理系统 (真实世界)
+# ...
+# 真实世界的过程噪声，我们假设它是一个固定的，我们想要去匹配的值
+real_world_process_variance = 3**2 
 
-# --- 数据生成逻辑 (与之前相同) ---
+# b) 滤波器初始化
+# ...
+# 这是我们要“调”的参数，代表我们模型对过程噪声的估计 越大越相信测量
+filter_model_process_variance = 0.5**2 # 比如，从5**2开始调
+
+# --- 2.数据生成逻辑 (与之前相同) ---
 true_positions = np.zeros(n_steps)
 measurements = np.zeros(n_steps)
 prior_means = np.zeros(n_steps)
@@ -32,7 +41,7 @@ for t in range(n_steps):
         frequency = 1   # 角频率 (控制振荡速度)  #process_variance = 5**2
         # 直接用关于时间t的函数计算当前位置，而不是依赖上一步的位置
         # 这样可以确保轨迹是我们想要的形状
-        true_positions[t] = amplitude * np.sin(frequency * t * dt) + np.random.normal(0, np.sqrt(process_variance))
+        true_positions[t] = amplitude * np.sin(frequency * t * dt) + np.random.normal(0, np.sqrt(real_world_process_variance))
 
 
         # # 在 for t in range(n_steps): 循环内部
@@ -40,7 +49,7 @@ for t in range(n_steps):
         # initial_vel = 0.0
         # acceleration = 0.1 # 恒定的加速度
         # time = t * dt
-        # true_positions[t] = initial_pos + initial_vel * time + 0.5 * acceleration * time**2 + np.random.normal(0, np.sqrt(process_variance))
+        # true_positions[t] = initial_pos + initial_vel * time + 0.5 * acceleration * time**2 + np.random.normal(0, np.sqrt(real_world_process_variance))
         # 在 for t in range(n_steps): 循环内部
 
 
@@ -48,7 +57,7 @@ for t in range(n_steps):
         # k = 0.2  # 曲线的陡峭程度
         # t0 = n_steps / 2 # 曲线的中点位置
         # time = t * dt
-        # true_positions[t] = L / (1 + np.exp(-k * (time - t0))) + np.random.normal(0, np.sqrt(process_variance))
+        # true_positions[t] = L / (1 + np.exp(-k * (time - t0))) + np.random.normal(0, np.sqrt(real_world_process_variance))
 
 
     measurements[t] = true_positions[t] + np.random.normal(0, np.sqrt(measurement_variance))
@@ -57,12 +66,14 @@ for t in range(n_steps):
     posterior_variances[t] = 1 / (precision_prior + precision_measurement)
     posterior_means[t] = posterior_variances[t] * (precision_prior * prior_means[t] + precision_measurement * measurements[t])
     if t < n_steps - 1:
-        # prior_means[t+1] = posterior_means[t] + velocity * dt  #线性运动模型
+        prior_means[t+1] = posterior_means[t] + velocity * dt  #线性运动模型
+
         # 定义正弦波的参数
-        amplitude = 50  # 振幅
-        omega  = 1   # 角频率 (控制振荡速度)
-        prior_means[t+1] = amplitude * np.sin(omega * (t+1) * dt) # 正弦波运动模型
-        prior_variances[t+1] = posterior_variances[t] + process_variance
+        # amplitude = 50  # 振幅
+        # omega  = 1   # 角频率 (控制振荡速度)
+        # prior_means[t+1] = amplitude * np.sin(omega * (t+1) * dt) # 正弦波运动模型
+
+        prior_variances[t+1] = posterior_variances[t] + filter_model_process_variance
 
 # --- 2. 交互式动画设置 ---
 fig, (ax_traj, ax_pdf) = plt.subplots(2, 1, figsize=(12, 14), gridspec_kw={'height_ratios': [2, 3]})
